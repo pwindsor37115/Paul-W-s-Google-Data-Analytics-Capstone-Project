@@ -306,7 +306,8 @@ ggplot(Summarized_MonthlyTrips, aes(x = start_month, y = total_rides, fill = mem
        x = "Month", y = "Total Trips") +
   scale_fill_manual(values = c("#f56580", "#57606c"))+ # Colors for member and casual
   scale_y_continuous(labels = label_number_si())+  # Use SI unit suffixes (K, M, etc.)
-  theme(plot.title = element_text(hjust=0.5))
+  theme(plot.title = element_text(hjust=0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
 ```
 
 #### Trips per Weekday
@@ -358,13 +359,13 @@ ggplot(summarized_data_hour, aes(x = hour_am_pm, y = total_rides, fill = member_
   theme(plot.title = element_text(hjust = 0.5), 
         strip.text.y = element_blank(),  # Remove text labels on the y-axis facets
         strip.background.y = element_blank(),  # Remove background for y-axis facets
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels and set font size
-        axis.text.y = element_text(size = 8),  # Set font size for y-axis labels
-        legend.position = "top",  # Move legend to the top
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  
+        axis.text.y = element_text(size = 8),  
+        legend.position = "top",  
         legend.box.margin = margin(0, 0, -20, 0),  # Reduce legend size by 50%
-        legend.key.size = unit(0.5, "lines"),  # Further reduce legend key size
+        legend.key.size = unit(0.5, "lines"),  # reduce legend key size again
         legend.title = element_blank(),
-        plot.margin = margin(t = 30))  # Adjust top margin of the plot
+        plot.margin = margin(t = 30))  #top margin of the plot
 ```
 
 <br>   
