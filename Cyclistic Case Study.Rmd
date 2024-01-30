@@ -1,0 +1,609 @@
+---
+title: 'Google Data Analytics Capstone Project. <br> Case Study 1: How Does a Bike-Share
+  Navigate Speedy Success?'
+author: "Paul W"
+date: "January 29, 2024"
+output: html_document
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Company Background
+
+In 2016, Cyclistic launched a successful bike-share offering.  Since then, the program has grown to a fleet of 5,824 bicycles that are geotracked and locked into a network of 692 stations across Chicago.  The bikes can be unlocked from one station and returned to any other station in the system anytime.  Until now, Cyclistic's marketing strategy relied on building general awareness and appealing to broad consumer segments.  One approach that helped make these things possible was the flexibility of its pricing plans: single-ride passes, full-day passes, and annual memberships. Customers who purchase single-ride or full day passes are referred to as casual riders. Customers who purchase annual memberships are Cyclistic members.  
+
+## Business Task
+
+Cyclistic's finance analysts have concluded that annual members are much more profitable than casual riders.  Although the pricing flexibility helps Cyclistic attract more customers, the marketing director believes that maximizing the number of annual members will be key to future growth.  The marketing director has a clear goal:  Design marketing strategies aimed at converting casual riders into annual members.  In order to do that, however, the marketing team needs to better understand how annual members and casual riders differ, why casual riders would buy a membership, and how digital media could affect their marketing tactics.  The director and her team are interested in analyzing the Cyclistic historical bike trip data to identify trends.
+
+The purpose of this case study and report is to do an exploratory data analysis of the provided data and identify any data points, descriptive statistics or trends that may help the marketing team achieve their goals.
+
+**The analysis is broken up into these sections that are steps of the data analysis process from the course:**
+
+* Ask
+
+* Prepare
+
+* Process
+
+* Analyze
+
+* Share
+
+* Act
+
+---
+
+## Ask - Three Questions
+
+#### Three questions will guide the future marketing program:
+
+* How do annual members and casual riders use Cyclistic bikes differently?
+
+* Why would casual riders buy Cyclistic annual memberships?
+
+* How can Cyclistic use digital media to influence casual riders to become members
+
+---
+
+## Prepare - Preparation of Data
+
+#### Description of all data sources used and technical information
+
+The data for this project was provided by Coursera in the form of many csv files. Each csv file has bike ride data with a unique id to represent each bike trip made and each file has data for a particular month and year.  These files can be made to create one large fact table of bike ride data. No files were offered to create dimension tables.  Also sql was not needed to pull the files - they were made already available in several folders. Instead of using sql to prepare the files, R was used to prepare the data and perform an analysis.  R Markdown was used to create the report document and further analysis and presentation was done with Tableau Public.  Only one year's worth of data could be used for this report because of the limits to how much data can be uploaded to Tableau Public.  The documentation from the project also notes that we will not be able to identify individual users and purchases because there are no credit card numbers or identification numbers given to identify them.  There were no data dictionaries or layouts provided, further complicating the analysis performed. 
+
+Here are some screenshots of the csv files and a sneak peak view of how the tables with their columns appear:
+
+*Files used:*
+
+```{r, echo=FALSE,out.width='75%', out.length='75%'}
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/files_screenshot1.png")
+```
+
+
+
+*Example of table structure found in csv files:*
+
+```{r, echo=FALSE,out.width='140%', out.length='140%'}
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/table_sneak_peak1.png")
+```
+
+
+---
+
+#### Install and Load Packages
+```{r install_load, echo=TRUE, message=FALSE, warning=FALSE, error=FALSE}
+# Load libraries 
+library("tidyverse")
+library("leaflet")
+library("dplyr")
+library("magrittr")
+library("readr")
+library("ggplot2")
+library("stringr")
+library("geosphere")
+library("sf")
+library("maps")
+library("lubridate")
+library("scales")
+library("viridis")
+library("gridExtra")
+```
+
+<br>
+
+#### Combine csv files into one dataframe. Check csv files for issues that would prevent combining them
+Instead of inspecting each csv file individually, this method combines all of the csv files for 2022 into one dataframe. It also checks for anything that can produce errors such as differences found in column names, column types, missing or extra columns etc.  The console will give a report for each file showing if there were errors or if the file successfully passed inspection. No errors were found and files were combined successfully:
+
+```{r combine,echo=TRUE, message=FALSE, warning=FALSE}
+Data_Combined_2022 <- list.files(path = "C:/Users/paulw/Desktop/Google Data Analyst Cert/Cyclistic Data 2022",
+                                 pattern="*.csv", 
+                                 full.names = T) %>% 
+                                 map_df(~read_csv(.))
+
+#Data_Combined_2022 <- Data_Combined_2022 %>% slice(1:100000)
+```
+
+---
+
+## Process - Data Processing and Data Validation
+
+
+#### Initial Review of Tables and Any Documents
+For many projects, a data dictionary/layout is normally reviewed by the analyst.  This project did not include one which would be very helpful when inspecting the fields and checking for errors. Also, it is good to know exactly what is being reported in a field and to know what lengths, data types etc. are to be expected. We will have to look at the fields and try to get an idea of what data types should be in those columns and if they contain facets, see if the correct facet values are there. Here we can start with str() to get a summary of what is going on in the dataframe and get names of columns, the data types found in the columns and a few sample values of what is found in each column:
+```{r InitialReview,echo=TRUE, message=FALSE, warning=FALSE}
+str(Data_Combined_2022)
+```
+
+<br>  
+
+#### Initial Cleaning of Columns with Strings
+Clean leading and trailing spaces that may be before or after text in columns that have strings
+```{r InitialCleaning,echo=TRUE, message=FALSE, warning=FALSE}
+Columns_with_strings = c("ride_id", "rideable_type", "start_station_name", "start_station_id", "end_station_name", "end_station_id", "member_casual")
+
+Data_Combined_2022[Columns_with_strings] <- lapply(Data_Combined_2022[Columns_with_strings],trimws)
+
+```
+
+<br>   
+
+#### Identify the columns in the dataframe that have a NA (null) value.  Are these expected to occasionally have an NA value?
+Total Rows in Data_Combined_2022 = 5,667,717    Total Rows where a column has NA = 1,298,357. **Roughly 23% of the rows for 2022 have an NA in at least one column. Normally would get with someone to figure out why almost a quarter of the data is unusable....**
+```{r CheckNA,echo=TRUE, message=FALSE, warning=FALSE}
+AnyColsNA <- colnames(Data_Combined_2022[colSums(is.na(Data_Combined_2022))>1])
+
+AnyRowsNA <- Data_Combined_2022[rowSums(is.na(Data_Combined_2022))>1,]  #Return data frame with rows containing NA value.
+
+Total_Rows_2022 <- nrow(Data_Combined_2022)   #Total Rows in the data frame so far
+Total_Rows_wNA_2022 <- nrow(AnyRowsNA)        #Total Rows with one or more fields with NA
+
+
+
+Cleaned_Data_2022 <- Data_Combined_2022[rowSums(is.na(Data_Combined_2022))==0,]   #Dropping rows from the dataframe that have NA values and renaming the dataframe
+```
+
+<br>   
+
+#### Add new columns
+Add new columns: ride_time_minutes, started_at_hour, start_day_of_week, start_month, ride_distance_feet
+```{r AddNewcolumns,echo=TRUE, message=FALSE, warning=FALSE}
+
+# Add a column ride_time_minutes that is the difference in start and end times, convert to minutes
+Cleaned_Data_2022 <- Cleaned_Data_2022 %>% mutate(ride_time_minutes = difftime(ended_at,started_at,units="mins")) 
+Cleaned_Data_2022$ride_time_minutes <- as.numeric(gsub(" mins", "", Cleaned_Data_2022$ride_time_minutes)) #reformat as number
+
+#Add a column that has the hour the ride started
+Cleaned_Data_2022$started_at_hour <- hour(Cleaned_Data_2022$started_at)
+
+Cleaned_Data_2022$hour_am_pm <- ifelse(
+  Cleaned_Data_2022$started_at_hour == 0, "12 AM",
+  ifelse(
+    Cleaned_Data_2022$started_at_hour == 12, "12 PM",
+    ifelse(
+      Cleaned_Data_2022$started_at_hour < 12,
+      paste0(Cleaned_Data_2022$started_at_hour, " AM"),
+      paste0(Cleaned_Data_2022$started_at_hour - 12, " PM")
+    )
+  )
+)
+# Add a column for the week day the ride started on and a column for the month it was in 
+Cleaned_Data_2022$start_day_of_week <- weekdays(Cleaned_Data_2022$started_at)
+Cleaned_Data_2022$start_month <- month(Cleaned_Data_2022$started_at, label = TRUE, abbr = FALSE)
+
+# Add a ride_distance_feet column that is the distance between starting and ending stations.
+Cleaned_Data_2022 <- Cleaned_Data_2022 %>% mutate(ride_distance_feet = distGeo(matrix(c(start_lng, start_lat),   ncol=2),matrix(c(end_lng, end_lat), ncol=2))*3.2808399)
+```
+
+---
+
+## Data Validation and More Cleaning
+This is where I have my own steps inserted into the process step used by this course.  This is where the Process step overlaps with the Analyze step. Normally, the data is validated before further processing.  The data is checked against a data dictionary or any notes we have and some testing occurs. If errors are found, then the data may have to be sent back or you may have to go and pull a new query.  While this is going on , the rest of the project can be continued while waiting for feedback on the data quality and any questions about the data issues to be answered.
+
+<br> 
+
+#### Checking columns that contain unique identifiers - does the column have unique values?
+The ride_id column is used to identify individual tirps. Checking if all values are unique by comparing the row     count to the distinct count of ride_id's.  Both the row count for the data frame and the distinct number of ride id's match
+```{r CheckUnique,echo=TRUE, message=FALSE, warning=FALSE}
+Distinct_ride_ids <- n_distinct(Data_Combined_2022$ride_id)
+Distinct_ride_ids
+Total_Rows_2022 <- nrow(Data_Combined_2022)
+Total_Rows_2022
+```
+
+<br>   
+
+#### Columns with facet data - do these have any unexpected values?
+An example of a facet column would be a column like member_casual that has repeated values that stratify the data into categories. Even though we do not have a data dictionary it appears that this column should have only two values  - "member" or "casual".  The rideable_types column should also have values "electric_bike", "classic_bike" and "docked bike".  The station names and ids should be checked as well but that will be mentioned in the next subsection:
+
+*Values found in member_casual column are correct:*
+
+```{r member_casual_check,echo=TRUE, message=FALSE, warning=FALSE}
+check_member_casual <- unique(Cleaned_Data_2022$member_casual)
+check_member_casual
+```
+
+*Values found in rideable-types are correct:*
+
+```{r rideable_types_check,echo=TRUE, message=FALSE, warning=FALSE}
+check_rideable_type <- unique(Cleaned_Data_2022$rideable_type)
+check_rideable_type
+```
+
+<br>   
+
+#### Columns with facet data continued - why are there several station names found per station id?
+Several station id's were found where they had several station names attached to them. Should there not be one station id per station name?  Again there is no data dictionary or layout to refer to and there is not any more information provided in the project handout.  
+
+An example of multiple station names listed with a station id:
+
+```{r multiple_stations_per_id,echo=FALSE, message=FALSE, warning=FALSE, out.width='40%', out.length='40%',fig.align = 'center'}
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/multiple_stations_per_id1.png")
+```
+
+---  
+
+#### Find any extreme latitude and longitude data points that do not belong in the data set
+The latitude and longitude points in the data should all be located in the Chicago area.  Any extreme points that do not belong in the Chicago area may affect the map negatively when trying to load or display it. They may also throw off any distance and travel time calculations. 
+
+
+Starting and Ending geolocations should be clustered together when using a scatter plot that has longitutde on the y axis and latitude on the x axis.  Extraneous points will appear away from the cluster of Chicago points. In the images below, the clustered points belonging to Chicago are in the -75 to -84 range for longitude points and latitude points are in the 40 to 43 range.  The data that does not belong to Chicago is away from these clusters and outside of these ranges:
+
+*Starting Station Latitude and Longitude points:*
+
+```{r CheckLatLng_Start,echo=TRUE, message=FALSE, warning=FALSE,out.width='70%', out.length='70%',fig.align = 'center'}
+
+#This next line can be used to generate the plot but will have to be made separately and then inserted into the document as an image. R Studio freezes when trying to execute this while knitting the document
+
+#(checking_start_plot <- ggplot(Cleaned_Data_2022,aes(x = start_lat, y = start_lng)) + geom_point())
+
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/Not_In_Chicago_1.png")
+```
+
+*Ending Station Latitude and Longitude points:*
+
+```{r CheckLatLng_End,echo=TRUE, message=FALSE, warning=FALSE,out.width='70%', out.length='70%',fig.align = 'center'}
+
+#This next line can be used to generate the plot but will have to be made separately and then inserted as an image into the document. R Studio freezes when trying to execute this while knitting the document
+
+#(checking_end_plot <- ggplot(Cleaned_Data_2022,aes(x = end_lat, y = end_lng)) + geom_point())
+
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/Not_In_Chicago_2.png")
+```
+
+*Identiyfing and removing the bad Latitude and Longitude points.  Renaming the data frame:*
+
+```{r Remove_bad_points,echo=TRUE, message=FALSE, warning=FALSE}
+#Going online and looking up each of these points in this dataframe will show they are not in Chicago  
+Not_Chicago_Locations <- subset(Cleaned_Data_2022, start_lat < 40 | start_lng > -75 | end_lat < 40 | end_lng > -75)
+
+
+#Removing the rows that have ride data outside the Chicago area
+Cleaned_Data_2022 <- subset(Cleaned_Data_2022, (start_lat < 43))
+Cleaned_Data_2022 <- subset(Cleaned_Data_2022, (end_lng != 0))
+```
+
+<br>   
+
+#### Find and remove rows with started_at time greater than ended_at time
+The columns started_at and ended_at have timestamps for each bike trip. Are there rows where the start time is greater than the end time?  Yes there are 69 rows where this happens and these rows will give a negative value when calculating the ride time. These also have to be removed from the data
+```{r Start>EndTime,echo=TRUE, message=FALSE, warning=FALSE}
+AnyRows_Invalid_Travel_Time<- subset(Cleaned_Data_2022, started_at > ended_at)
+Cleaned_Data_2022 <- subset(Cleaned_Data_2022,started_at <= ended_at)#& started_at = ended_at)
+```
+
+<br>   
+
+#### Remove any rows where the started_at and ended_at time is incomplete.  
+There are rows where there is a date in the column but not a time stamp.These are being removed also. There is a total of 41 rows where this occurs. There is no data dictionary provided by the project but after careful examination, the date time fields should have values with a length of 19.  Filtering out lengths less than this
+will remove incomplete start and times.
+```{r IncompleteTimes,echo=TRUE, message=FALSE, warning=FALSE}
+Incomplete_Start_Time <- Cleaned_Data_2022[nchar(as.character(Cleaned_Data_2022$started_at)) < 19, ]
+Cleaned_Data_2022 <- subset(Cleaned_Data_2022, nchar(as.character(started_at)) == 19)
+Incomplete_End_Time <-Cleaned_Data_2022[nchar(as.character(Cleaned_Data_2022$ended_at)) < 19, ]
+Cleaned_Data_2022 <- subset(Cleaned_Data_2022, nchar(as.character(ended_at)) == 19)
+```
+
+---  
+
+## Analyze
+
+#### Trips Per Month
+Both Casual and Member trips peak during the summer months. However, there are fewer casual trips than member tirps overall and the casual trips decline sharply after July.  
+```{r TripsByMonth,echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center',out.width='70%'}
+Summarized_MonthlyTrips <- Cleaned_Data_2022 %>%
+  group_by(start_month, member_casual) %>%
+  summarize(total_rides = n_distinct(ride_id))
+
+
+ggplot(Summarized_MonthlyTrips, aes(x = start_month, y = total_rides, fill = member_casual)) +
+  #geom_bar(stat = "identity", position = "dodge") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = .7) +
+  labs(title = "Total Trips by Month",
+       x = "Month", y = "Total Trips") +
+  scale_fill_manual(values = c("#f56580", "#57606c"))+ # Colors for member and casual
+  scale_y_continuous(labels = label_number_si())+  # Use SI unit suffixes (K, M, etc.)
+  theme(plot.title = element_text(hjust=0.5))
+```
+
+#### Trips per Weekday
+Casual riders are more likely to rent a bike on the weekend on Saturday and Sunday than during the work week.
+```{r WeekdayTrips,echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center',out.width='70%'}
+Summarized_WeekdayTrips <- Cleaned_Data_2022 %>%
+  group_by(start_day_of_week, member_casual) %>%
+  summarize(total_rides = n_distinct(ride_id))
+
+# Arrange the dataframe where the days of the week are in order
+Summarized_WeekdayTrips$start_day_of_week <- factor(Summarized_WeekdayTrips$start_day_of_week,
+                                            levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"))
+
+ggplot(Summarized_WeekdayTrips, aes(x = start_day_of_week, y = total_rides, fill = member_casual)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = .7) +
+  labs(title = "Weekday Trips",
+       x = "Day of the Week", y = "Total Trips") +
+  scale_fill_manual(values = c("#f56580", "#57606c"))+ # Colors for member and casual
+  scale_y_continuous(labels = label_number_si())+  # Use SI unit suffixes (K, M, etc.)
+  #scale_y_continuous(labels = scales::number_format())  # Use regular numeric formatting
+  #theme(plot.title = element_text(hjust=0.5), plot.margin = margin(t=20))
+  theme(plot.title = element_text(hjust=0.5))
+
+```
+
+#### Trips by the Hour
+Member trips peak both in the morning and later in the evening at 5pm.  Casual trips peak at 5 pm but do not peak in the morning.  Casual trips occur more between 12pm and 5pm.
+```{r TripsByHour,echo=FALSE, message=FALSE, warning=FALSE, fig.align = 'center',out.width='70%'}
+#    Create a summarized data frame with the total count of distinct 'ride_id' for each hour and 'member_casual'
+summarized_data_hour <- Cleaned_Data_2022 %>%
+  group_by(hour_am_pm, member_casual) %>%
+  summarize(total_rides = n_distinct(ride_id))
+
+summarized_data_hour$hour_am_pm <- factor(summarized_data_hour$hour_am_pm, 
+                                          levels = c("1 AM", "2 AM", "3 AM", 
+                                                     "4 AM", "5 AM", "6 AM", "7 AM", 
+                                                     "8 AM", "9 AM", "10 AM", "11 AM", 
+                                                     "12 PM", "1 PM", "2 PM", "3 PM", 
+                                                     "4 PM", "5 PM", "6 PM", "7 PM", 
+                                                     "8 PM", "9 PM", "10 PM", "11 PM", "12 AM"))
+
+ggplot(summarized_data_hour, aes(x = hour_am_pm, y = total_rides, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_grid(member_casual ~ ., scales = "free_y") +
+  labs(title = "Trips By The Hour",
+       x = "Hour of the Day", y = "Total Trips") +
+  scale_fill_manual(values = c("#f56580", "#57606c")) +  # Colors for member and casual
+  scale_y_continuous(labels = scales::label_number_si()) +  # Use SI unit suffixes (K, M, etc.)
+  theme(plot.title = element_text(hjust = 0.5), 
+        strip.text.y = element_blank(),  # Remove text labels on the y-axis facets
+        strip.background.y = element_blank(),  # Remove background for y-axis facets
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels and set font size
+        axis.text.y = element_text(size = 8),  # Set font size for y-axis labels
+        legend.position = "top",  # Move legend to the top
+        legend.box.margin = margin(0, 0, -20, 0),  # Reduce legend size by 50%
+        legend.key.size = unit(0.5, "lines"),  # Further reduce legend key size
+        legend.title = element_blank(),
+        plot.margin = margin(t = 30))  # Adjust top margin of the plot
+```
+
+<br>   
+
+#### Time Spent Summary.
+Casual riders spend more time on averge and in total riding their bikes than Member riders.
+```{r TimeSpent,echo=FALSE, message=FALSE, warning=FALSE}
+Time_Spent_Summary <- Cleaned_Data_2022 %>%                #Summarize the travel time by members and casual riders
+  group_by(member_casual) %>%
+  summarise(
+    `Total Minutes Spent` = sum(ride_time_minutes),
+    `Max. Minutes Spent` = max(ride_time_minutes),
+    `Avg. Minutes Spent` = mean(ride_time_minutes),
+    `Median Minutes Spent` = median(ride_time_minutes),
+    `Min. Minutes Spent` = min(ride_time_minutes)
+  ) 
+Time_Spent_Summary <- t(Time_Spent_Summary)                #Swap the rows for columns and vice versa
+Time_Spent_Summary <- as.data.frame(Time_Spent_Summary)    #Convert the matrix to a data frame, to rename columns
+Time_Spent_Summary <- Time_Spent_Summary[-1, ]             #remove first row,it's not needed
+colnames(Time_Spent_Summary) <- c('casual', 'member')      #change the column names, do not have to rename first column b/c it has become the index
+Time_Spent_Summary$casual <- prettyNum(Time_Spent_Summary$casual, big.mark = ",") #convert columns to numeric, add comma separator for numbers over 999
+Time_Spent_Summary$member <- prettyNum(Time_Spent_Summary$member, big.mark = ",")
+Time_Spent_Summary  #a viewer window can be done but does not help much. creating a tab with the data frame using View() looks better
+```
+
+<br>   
+
+#### Distance Traveled Summary
+Casual riders spend more time on average and in total on their bikes than Members, but Members' travel distances are slightly more than what Casual riders travel.  
+```{r DistanceTraveled,echo=FALSE, message=FALSE, warning=FALSE}
+Distance_Traveled_Summary <- Cleaned_Data_2022 %>%                       #Summarize the distance traveled by members and casual riders
+  group_by(member_casual) %>%
+  summarise(
+    `Total Distance Traveled` = sum(ride_distance_feet),
+    `Max. Ride Distance Feet` = max(ride_distance_feet),
+    `Avg. Ride Distance Feet` = mean(ride_distance_feet),
+    `Median Ride Distance Feet` = median(ride_distance_feet),
+    `Min. Ride Distance Feet` = min(ride_distance_feet)
+  ) 
+Distance_Traveled_Summary <- t(Distance_Traveled_Summary)                #Swap the rows for columns and vice versa
+Distance_Traveled_Summary <- as.data.frame(Distance_Traveled_Summary)    #Convert the matrix to a data frame, to rename columns
+Distance_Traveled_Summary <- Distance_Traveled_Summary[-1, ]             #remove first row,it's not needed
+colnames(Distance_Traveled_Summary) <- c('casual', 'member')             #change the column names
+Distance_Traveled_Summary$casual <- prettyNum(Distance_Traveled_Summary$casual, big.mark = ",") #convert columns to numeric, add comma separator for numbers over 999
+Distance_Traveled_Summary$member <- prettyNum(Distance_Traveled_Summary$member, big.mark = ",")
+Distance_Traveled_Summary
+```
+
+<br>   
+
+#### Before creating visuals such as top ten stations by total rides for members and casual riders, will need to split the data into two subsets
+```{r CasualMemberSubsets,echo=TRUE, message=FALSE, warning=FALSE}
+member_data <- subset(Cleaned_Data_2022, member_casual == "member")
+casual_data <- subset(Cleaned_Data_2022, member_casual == "casual")
+```
+
+<br>   
+
+#### Rideable Types 
+Members do not show having any trips for docked bikes (again this could be due to the removal of incomplete rows in the data). We do not have any data on bike availability to see whether or not there is a preference for either type of bike.  Not enough information has been given to determine whether there is a preference for a type of bike. Also there is this question: can a docked bike also be electric? or a classic bike?  The information that came with the case study does not go answer this. More information will be needed from the marketing team.  
+```{r RideableTypes,echo=FALSE, message=FALSE, warning=FALSE,fig.align = 'center',out.width='50%'}
+# Rideable Types - Members only pie chart
+Rideable_Types_Member_Plot <- member_data %>%
+  count(rideable_type) %>%
+  ggplot(aes(x = "", y = n, fill = rideable_type)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y") +
+  theme_void() +
+  #theme(legend.position = "bottom") +
+  theme(legend.position = "none",plot.title.position = 'plot',plot.title = element_text(hjust = 0.5))+
+  ggtitle("Rideable Types - Member") +
+  scale_fill_manual(values = c("electric_bike" = "#b3b7b8", "classic_bike" = "#57606c", "docked_bike" = "#CCCCCC")) +
+  geom_text(aes(label = paste0(rideable_type, "\n", scales::percent(n / sum(n)))), position = position_stack(vjust = 0.5))
+
+# Rideable Types - Casual only pie chart
+Rideable_Types_Casual_Plot <- casual_data %>%
+  count(rideable_type) %>%
+  ggplot(aes(x = "", y = n, fill = rideable_type)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y") +
+  theme_void() +
+  #theme(legend.position = "bottom") +
+  theme(legend.position = "none",plot.title.position = 'plot',plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Rideable Types - Casual") +
+  scale_fill_manual(values = c("electric_bike" = "#ffbed1", "classic_bike" = "#f56580", "docked_bike" = "#f498b6")) +
+  geom_text(aes(label = paste0(rideable_type, "\n", scales::percent(n / sum(n)))), position = position_stack(vjust = 0.5))
+
+grid.arrange(Rideable_Types_Member_Plot,Rideable_Types_Casual_Plot, ncol=2)
+```
+
+
+#### Top Ten Starting Station Names by Total Trip Count - Casual Only
+Casual rider tips are more concentrated deep within Chicago's downtwon area, along Lake Michigan's shore. The bike station at Streeter Drive and Grand Ave is the most popular and frequented station used by Casual riders.  The further away from this bike station, fewer Casual trips are logged. (See the map plot in the next image that goes with this top ten summary)
+```{r TopTenCasual,echo=FALSE, message=FALSE, warning=FALSE}
+Top_Ten_Start_Stations_Casual <- casual_data %>%   #  assuming you already created this data subset:  casual_data <- subset(Cleaned_Data_2022, member_casual == "casual")
+  group_by(start_station_name) %>%
+  summarize(total_trips = n()) %>%
+  arrange(desc(total_trips)) %>%
+  slice_head(n = 10)
+
+Top_Ten_Start_Stations_Casual <- as.data.frame(Top_Ten_Start_Stations_Casual)    
+Top_Ten_Start_Stations_Casual$total_trips <- prettyNum(Top_Ten_Start_Stations_Casual$total_trips, big.mark = ",") 
+Top_Ten_Start_Stations_Casual
+```
+
+#### Map plot of Starting Stations and Total Trips - Casual Riders only .  
+```{r MapCasual,echo=FALSE, message=FALSE, warning=FALSE,fig.align = 'center',out.width='80%', out.length='80%'}
+
+casual_ride_counts <- Cleaned_Data_2022 %>%                    
+  filter(member_casual == "casual") %>%         #summarise the totals by casual riders only
+  group_by(start_lat, start_lng) %>%
+  summarise(total_rides = n()) %>%
+  arrange(desc(total_rides))
+
+casual_map_color_pal <- colorNumeric(          # Set up the color palette
+  #palette = c("#ff00cc", "#ff0033"),
+  palette = c("#ffACBD", "#ff0033"),
+  domain = casual_ride_counts$total_rides
+)
+
+Casual_Map <- leaflet(casual_ride_counts) %>%
+  addProviderTiles("CartoDB.Voyager") %>%      # Create the leaflet map.  These are free popular maps to use:  CartoDB.Positron, CartoDB.DarkMatter and CartoDB.Voyager
+  addCircles(
+    lat = casual_ride_counts$start_lat,
+    lng = casual_ride_counts$start_lng,
+    color = ~casual_map_color_pal(total_rides),
+    fillColor = ~casual_map_color_pal(total_rides),
+    fillOpacity = 0.7,
+    radius = ~sqrt(total_rides) * 5,
+    stroke = FALSE,
+    label = ~paste("Starting Stations and Total Rides, Casual Only", total_rides)
+  ) %>%
+  addLegend(
+    pal = casual_map_color_pal,
+    values = ~total_rides,
+    title = "Starting Stations and <br> Total Rides, Casual Only",
+    opacity = 1
+  ) 
+
+#Next line will display the map, but due to the large size of the dataset R Markdown freezes. A copy of the map image is included instead.
+#Casual_Map
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/Casual_Map1.png")
+
+```
+
+<br>   
+
+#### Top Ten Starting Station Names by Total Trip Count - Members Only
+Member trips are also more frequently close to Lake Michigan and downtown Chicago. However they are more spread out than the Member trips.  The Member trips also appear to be more evenly spread out among the popular bike stations that are near the lake shore and downtown area.  (See the map plot in the next image that goes with this top ten summary).
+```{r TopTenMembers,echo=FALSE, message=FALSE, warning=FALSE}
+Top_Ten_Start_Stations_Members <- member_data %>%   #  assuming you already created this dataset:  member_data <- subset(Cleaned_Data_2022, member_casual == "member")
+  group_by(start_station_name) %>%
+  summarize(total_trips = n()) %>%
+  arrange(desc(total_trips)) %>%
+  slice_head(n = 10)
+
+Top_Ten_Start_Stations_Members <- as.data.frame(Top_Ten_Start_Stations_Members)    
+Top_Ten_Start_Stations_Members$total_trips <- prettyNum(Top_Ten_Start_Stations_Members$total_trips, big.mark = ",") 
+Top_Ten_Start_Stations_Members
+```
+
+
+#### Map plot of Starting Stations and Total Trips - Members only .  
+```{r MapMember,echo=FALSE, message=FALSE, warning=FALSE,fig.align = 'center',out.width='80%', out.length='80%'}
+member_ride_counts <- Cleaned_Data_2022 %>%                    
+  filter(member_casual == "member") %>%        
+  group_by(start_lat, start_lng) %>%
+  summarise(total_rides = n()) %>%
+  arrange(desc(total_rides))
+
+member_map_color_pal <- colorNumeric(                      
+  #palette = c("#2471a3", "#1b2631"),
+  palette = c("#73A4C4", "#1b2631"),
+  domain = member_ride_counts$total_rides
+)
+
+Member_Map<-leaflet(member_ride_counts) %>%
+  addProviderTiles("CartoDB.Voyager") %>%      
+  addCircles(
+    lat = member_ride_counts$start_lat,
+    lng = member_ride_counts$start_lng,
+    color = ~member_map_color_pal(total_rides),
+    fillColor = ~member_map_color_pal(total_rides),
+    fillOpacity = 0.7,
+    radius = ~sqrt(total_rides) * 5,
+    stroke = FALSE,
+    label = ~paste("Starting Stations and Total Rides, Member Only", total_rides)
+  ) %>%
+  addLegend(
+    pal = member_map_color_pal,
+    values = ~total_rides,
+    title = "Starting Stations and <br> Total Rides, Member Only",
+    opacity = 1
+  )
+
+
+#Next line will display the map, but due to the large size of the dataset R Markdown freezes. A copy of the map image is included instead.
+#Member_Map
+knitr::include_graphics("C:/Users/paulw/Desktop/Google Data Analyst Cert/R Documents/Member_Map1.png")
+```
+
+---
+
+## Share
+
+Besides this R markdown document,  below is a link to a report and dashboard made in Tableau Public that can be sent to the marketing department as well. The Tableau Public report is set up as a presentation that goes over the analyis findings and the recommendations. There is also a link to the code documentation listed below the Tableau Public link:  
+
+*Tableau Public Report*  
+https://public.tableau.com/app/profile/paul.windsor/viz/GoogleDataAnalyticsProject-CyclisticCaseStudy/Story1
+
+
+
+*Cyclistic Data Analysis Code Documentation*  
+https://github.com/pwindsor37115/Paul-W-s-Google-Data-Analytics-Capstone-Project/blob/main/Cyclistic%20Data%20Analysis.R
+
+
+*More documentation for this project can also be found on this Github repository page*  
+https://github.com/pwindsor37115/Paul-W-s-Google-Data-Analytics-Capstone-Project
+---
+
+## Act
+
+**Top three recommendations given to the marketing department:**
+
++  More data and information is needed from the rest of the team to properly use this data.  The large amount of data that had to be removed because it was incomplete is a big concern.  This affects the report negatively and the ability to come to any conclusions.  Also there are the issues of multiple station names for each station id, missing start station data on rows but end station data is populated, etc. Examples of data issues such as these that need to be reviewed and also will need a better description of the business processes and how data is recorded.  Also another tool other than Tableau Public needs to be used due to the limit on data that can be uploaded - yearly trends could not be examined b/c of this.  
+
++ At the stations, offer a discount to casual riders if they fill out a survey to get more information on how and why they purchase day passes. The data suggests that member riders may be using the bikes more for traveling to work or nearby their home, while the casual riders appear to be using the bikes more for recreational purposes. Maybe there are customers who live downtown but are not members that may be better persuaded into purchasing a membership if we can gather more information from them as well.
+
++ Offer seasonal passes, instead of just day passes, for bikes while offering other services. Begin advertising the seasonal passes during the spring months in March and April.
+
+<br>
+<br>
+<br>
+
+
+
+
+
+
+
+
+
