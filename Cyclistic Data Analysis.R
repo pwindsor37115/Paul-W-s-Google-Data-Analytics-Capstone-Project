@@ -1,6 +1,5 @@
 #--------------------------Prepare-------------------------------------------
 
-
 # Install Packages
 install.packages("tidyverse")
 install.packages("leaflet")
@@ -14,8 +13,6 @@ install.packages("sf")
 install.packages("maps")
 install.packages("lubridate")
 install.packages("viridis")
-
-
 
 # Load libraries 
 library("tidyverse")
@@ -124,7 +121,6 @@ Cleaned_Data_2022 <- subset(Cleaned_Data_2022, nchar(as.character(ended_at)) == 
 Cleaned_Data_Path <- "C:/Users/paulw/Desktop/Google Data Analyst Cert/Cyclistic Data 2022 Cleaned/"
 Cleaned_Data_2022_Filename <- "Cleaned_Data_2022.csv"
 write.csv(Cleaned_Data_2022,paste0(Cleaned_Data_Path,Cleaned_Data_2022_Filename), row.names = FALSE)
-
 
 
 # Add a column ride_time_minutes that is the difference in start and end times
@@ -347,9 +343,6 @@ Casual_Map <- leaflet(casual_ride_counts) %>%
     title = "Starting Stations and Total Rides, Casual Only",
     opacity = 1
   ) 
-
-  
-
 
 
 # Map plot of Starting Stations and Total Trips - Members only .  
